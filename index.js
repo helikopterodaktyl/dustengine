@@ -27,7 +27,7 @@ var ENVIRONMENT_IS_SHELL = !ENVIRONMENT_IS_WEB && !ENVIRONMENT_IS_NODE && !ENVIR
 
 // --pre-jses are emitted after the Module integration code, so that they can
 // refer to Module (if they choose; they can also define Module)
-// include: C:\Users\haxx\AppData\Local\Temp\tmpjiqbooq0.js
+// include: C:\Users\haxx\AppData\Local\Temp\tmp21axq4tw.js
 
   Module['expectedDataFileDownloads'] ??= 0;
   Module['expectedDataFileDownloads']++;
@@ -202,21 +202,21 @@ Module['FS_createPath']("/resources", "Skeleton_Without_VFX", true, true);
 
   })();
 
-// end include: C:\Users\haxx\AppData\Local\Temp\tmpjiqbooq0.js
-// include: C:\Users\haxx\AppData\Local\Temp\tmp3_hjhzpc.js
+// end include: C:\Users\haxx\AppData\Local\Temp\tmp21axq4tw.js
+// include: C:\Users\haxx\AppData\Local\Temp\tmp_gsn2fps.js
 
     // All the pre-js content up to here must remain later on, we need to run
     // it.
     if ((typeof ENVIRONMENT_IS_WASM_WORKER != 'undefined' && ENVIRONMENT_IS_WASM_WORKER) || (typeof ENVIRONMENT_IS_PTHREAD != 'undefined' && ENVIRONMENT_IS_PTHREAD) || (typeof ENVIRONMENT_IS_AUDIO_WORKLET != 'undefined' && ENVIRONMENT_IS_AUDIO_WORKLET)) Module['preRun'] = [];
     var necessaryPreJSTasks = Module['preRun'].slice();
-  // end include: C:\Users\haxx\AppData\Local\Temp\tmp3_hjhzpc.js
-// include: C:\Users\haxx\AppData\Local\Temp\tmp9gc85nr5.js
+  // end include: C:\Users\haxx\AppData\Local\Temp\tmp_gsn2fps.js
+// include: C:\Users\haxx\AppData\Local\Temp\tmpia0e65i_.js
 
     if (!Module['preRun']) throw 'Module.preRun should exist because file support used it; did a pre-js delete it?';
     necessaryPreJSTasks.forEach((task) => {
       if (Module['preRun'].indexOf(task) < 0) throw 'All preRun tasks that exist before user pre-js code should remain after; did you replace Module or modify Module.preRun?';
     });
-  // end include: C:\Users\haxx\AppData\Local\Temp\tmp9gc85nr5.js
+  // end include: C:\Users\haxx\AppData\Local\Temp\tmpia0e65i_.js
 
 
 var arguments_ = [];
@@ -5092,6 +5092,11 @@ async function createWasm() {
       return (ctx.getSupportedExtensions() || []).filter(ext => supportedExtensions.includes(ext));
     };
   
+  var registerPreMainLoop = (f) => {
+      // Does nothing unless $MainLoop is included/used.
+      typeof MainLoop != 'undefined' && MainLoop.preMainLoop.push(f);
+    };
+  
   
   var GL = {
   counter:1,
@@ -5106,6 +5111,8 @@ async function createWasm() {
   offscreenCanvases:{
   },
   queries:[],
+  byteSizeByTypeRoot:5120,
+  byteSizeByType:[1,1,2,2,4,4,4,2,3,4,8],
   stringCache:{
   },
   unpackAlignment:4,
@@ -5119,6 +5126,11 @@ async function createWasm() {
         var ret = GL.counter++;
         for (var i = table.length; i < ret; i++) {
           table[i] = null;
+        }
+        // Skip over any non-null elements that might have been created by
+        // glBindBuffer.
+        while (table[ret]) {
+          ret = GL.counter++;
         }
         return ret;
       },
@@ -5136,6 +5148,103 @@ async function createWasm() {
           HEAP32[(((buffers)+(i*4))>>2)] = id;
         }
       },
+  MAX_TEMP_BUFFER_SIZE:2097152,
+  numTempVertexBuffersPerSize:64,
+  log2ceilLookup:(i) => 32 - Math.clz32(i === 0 ? 0 : i - 1),
+  generateTempBuffers:(quads, context) => {
+        var largestIndex = GL.log2ceilLookup(GL.MAX_TEMP_BUFFER_SIZE);
+        context.tempVertexBufferCounters1 = [];
+        context.tempVertexBufferCounters2 = [];
+        context.tempVertexBufferCounters1.length = context.tempVertexBufferCounters2.length = largestIndex+1;
+        context.tempVertexBuffers1 = [];
+        context.tempVertexBuffers2 = [];
+        context.tempVertexBuffers1.length = context.tempVertexBuffers2.length = largestIndex+1;
+        context.tempIndexBuffers = [];
+        context.tempIndexBuffers.length = largestIndex+1;
+        for (var i = 0; i <= largestIndex; ++i) {
+          context.tempIndexBuffers[i] = null; // Created on-demand
+          context.tempVertexBufferCounters1[i] = context.tempVertexBufferCounters2[i] = 0;
+          var ringbufferLength = GL.numTempVertexBuffersPerSize;
+          context.tempVertexBuffers1[i] = [];
+          context.tempVertexBuffers2[i] = [];
+          var ringbuffer1 = context.tempVertexBuffers1[i];
+          var ringbuffer2 = context.tempVertexBuffers2[i];
+          ringbuffer1.length = ringbuffer2.length = ringbufferLength;
+          for (var j = 0; j < ringbufferLength; ++j) {
+            ringbuffer1[j] = ringbuffer2[j] = null; // Created on-demand
+          }
+        }
+  
+        if (quads) {
+          // GL_QUAD indexes can be precalculated
+          context.tempQuadIndexBuffer = GLctx.createBuffer();
+          context.GLctx.bindBuffer(0x8893 /*GL_ELEMENT_ARRAY_BUFFER*/, context.tempQuadIndexBuffer);
+          var numIndexes = GL.MAX_TEMP_BUFFER_SIZE >> 1;
+          var quadIndexes = new Uint16Array(numIndexes);
+          var i = 0, v = 0;
+          while (1) {
+            quadIndexes[i++] = v;
+            if (i >= numIndexes) break;
+            quadIndexes[i++] = v+1;
+            if (i >= numIndexes) break;
+            quadIndexes[i++] = v+2;
+            if (i >= numIndexes) break;
+            quadIndexes[i++] = v;
+            if (i >= numIndexes) break;
+            quadIndexes[i++] = v+2;
+            if (i >= numIndexes) break;
+            quadIndexes[i++] = v+3;
+            if (i >= numIndexes) break;
+            v += 4;
+          }
+          context.GLctx.bufferData(0x8893 /*GL_ELEMENT_ARRAY_BUFFER*/, quadIndexes, 0x88E4 /*GL_STATIC_DRAW*/);
+          context.GLctx.bindBuffer(0x8893 /*GL_ELEMENT_ARRAY_BUFFER*/, null);
+        }
+      },
+  getTempVertexBuffer:(sizeBytes) => {
+        var idx = GL.log2ceilLookup(sizeBytes);
+        var ringbuffer = GL.currentContext.tempVertexBuffers1[idx];
+        var nextFreeBufferIndex = GL.currentContext.tempVertexBufferCounters1[idx];
+        GL.currentContext.tempVertexBufferCounters1[idx] = (GL.currentContext.tempVertexBufferCounters1[idx]+1) & (GL.numTempVertexBuffersPerSize-1);
+        var vbo = ringbuffer[nextFreeBufferIndex];
+        if (vbo) {
+          return vbo;
+        }
+        var prevVBO = GLctx.getParameter(0x8894 /*GL_ARRAY_BUFFER_BINDING*/);
+        ringbuffer[nextFreeBufferIndex] = GLctx.createBuffer();
+        GLctx.bindBuffer(0x8892 /*GL_ARRAY_BUFFER*/, ringbuffer[nextFreeBufferIndex]);
+        GLctx.bufferData(0x8892 /*GL_ARRAY_BUFFER*/, 1 << idx, 0x88E8 /*GL_DYNAMIC_DRAW*/);
+        GLctx.bindBuffer(0x8892 /*GL_ARRAY_BUFFER*/, prevVBO);
+        return ringbuffer[nextFreeBufferIndex];
+      },
+  getTempIndexBuffer:(sizeBytes) => {
+        var idx = GL.log2ceilLookup(sizeBytes);
+        var ibo = GL.currentContext.tempIndexBuffers[idx];
+        if (ibo) {
+          return ibo;
+        }
+        var prevIBO = GLctx.getParameter(0x8895 /*ELEMENT_ARRAY_BUFFER_BINDING*/);
+        GL.currentContext.tempIndexBuffers[idx] = GLctx.createBuffer();
+        GLctx.bindBuffer(0x8893 /*GL_ELEMENT_ARRAY_BUFFER*/, GL.currentContext.tempIndexBuffers[idx]);
+        GLctx.bufferData(0x8893 /*GL_ELEMENT_ARRAY_BUFFER*/, 1 << idx, 0x88E8 /*GL_DYNAMIC_DRAW*/);
+        GLctx.bindBuffer(0x8893 /*GL_ELEMENT_ARRAY_BUFFER*/, prevIBO);
+        return GL.currentContext.tempIndexBuffers[idx];
+      },
+  newRenderingFrameStarted:() => {
+        if (!GL.currentContext) {
+          return;
+        }
+        var vb = GL.currentContext.tempVertexBuffers1;
+        GL.currentContext.tempVertexBuffers1 = GL.currentContext.tempVertexBuffers2;
+        GL.currentContext.tempVertexBuffers2 = vb;
+        vb = GL.currentContext.tempVertexBufferCounters1;
+        GL.currentContext.tempVertexBufferCounters1 = GL.currentContext.tempVertexBufferCounters2;
+        GL.currentContext.tempVertexBufferCounters2 = vb;
+        var largestIndex = GL.log2ceilLookup(GL.MAX_TEMP_BUFFER_SIZE);
+        for (var i = 0; i <= largestIndex; ++i) {
+          GL.currentContext.tempVertexBufferCounters1[i] = 0;
+        }
+      },
   getSource:(shader, count, string, length) => {
         var source = '';
         for (var i = 0; i < count; ++i) {
@@ -5143,6 +5252,39 @@ async function createWasm() {
           source += UTF8ToString(HEAPU32[(((string)+(i*4))>>2)], len);
         }
         return source;
+      },
+  calcBufLength:(size, type, stride, count) => {
+        if (stride > 0) {
+          return count * stride;  // XXXvlad this is not exactly correct I don't think
+        }
+        var typeSize = GL.byteSizeByType[type - GL.byteSizeByTypeRoot];
+        return size * typeSize * count;
+      },
+  usedTempBuffers:[],
+  preDrawHandleClientVertexAttribBindings:(count) => {
+        GL.resetBufferBinding = false;
+  
+        // TODO: initial pass to detect ranges we need to upload, might not need
+        // an upload per attrib
+        for (var i = 0; i < GL.currentContext.maxVertexAttribs; ++i) {
+          var cb = GL.currentContext.clientBuffers[i];
+          if (!cb.clientside || !cb.enabled) continue;
+  
+          GL.resetBufferBinding = true;
+  
+          var size = GL.calcBufLength(cb.size, cb.type, cb.stride, count);
+          var buf = GL.getTempVertexBuffer(size);
+          GLctx.bindBuffer(0x8892 /*GL_ARRAY_BUFFER*/, buf);
+          GLctx.bufferSubData(0x8892 /*GL_ARRAY_BUFFER*/,
+                                   0,
+                                   HEAPU8.subarray(cb.ptr, cb.ptr + size));
+          cb.vertexAttribPointerAdaptor.call(GLctx, i, cb.size, cb.type, cb.normalized, cb.stride, 0);
+        }
+      },
+  postDrawHandleClientVertexAttribBindings:() => {
+        if (GL.resetBufferBinding) {
+          GLctx.bindBuffer(0x8892 /*GL_ARRAY_BUFFER*/, GL.buffers[GLctx.currentArrayBufferBinding]);
+        }
       },
   createContext:(/** @type {HTMLCanvasElement} */ canvas, webGLContextAttributes) => {
   
@@ -5192,6 +5334,23 @@ async function createWasm() {
         if (typeof webGLContextAttributes.enableExtensionsByDefault == 'undefined' || webGLContextAttributes.enableExtensionsByDefault) {
           GL.initExtensions(context);
         }
+  
+        context.maxVertexAttribs = context.GLctx.getParameter(0x8869 /*GL_MAX_VERTEX_ATTRIBS*/);
+        context.clientBuffers = [];
+        for (var i = 0; i < context.maxVertexAttribs; i++) {
+          context.clientBuffers[i] = {
+            enabled: false,
+            clientside: false,
+            size: 0,
+            type: 0,
+            normalized: 0,
+            stride: 0,
+            ptr: 0,
+            vertexAttribPointerAdaptor: null,
+          };
+        }
+  
+        GL.generateTempBuffers(false, context);
   
         return handle;
       },
@@ -5951,11 +6110,6 @@ async function createWasm() {
       }
     };
 
-  var _emscripten_cancel_main_loop = () => {
-      MainLoop.pause();
-      MainLoop.func = null;
-    };
-
 
   var onExits = [];
   var addOnExit = (cb) => onExits.push(cb);
@@ -6352,18 +6506,6 @@ async function createWasm() {
       return 0;
     };
 
-  
-  var __emscripten_runtime_keepalive_clear = () => {
-      noExitRuntime = false;
-      runtimeKeepaliveCounter = 0;
-    };
-  
-  var _emscripten_force_exit = (status) => {
-      warnOnce('emscripten_force_exit cannot actually shut down the runtime, as the build does not have EXIT_RUNTIME set');
-      __emscripten_runtime_keepalive_clear();
-      _exit(status);
-    };
-
   var _emscripten_get_device_pixel_ratio = () => {
       return (typeof devicePixelRatio == 'number' && devicePixelRatio) || 1.0;
     };
@@ -6503,6 +6645,19 @@ async function createWasm() {
 
   /** @suppress {duplicate } */
   var _glBindBuffer = (target, buffer) => {
+      // Calling glBindBuffer with an unknown buffer will implicitly create a
+      // new one.  Here we bypass `GL.counter` and directly using the ID passed
+      // in.
+      if (buffer && !GL.buffers[buffer]) {
+        var b = GLctx.createBuffer();
+        b.name = buffer;
+        GL.buffers[buffer] = b;
+      }
+      if (target == 0x8892 /*GL_ARRAY_BUFFER*/) {
+        GLctx.currentArrayBufferBinding = buffer;
+      } else if (target == 0x8893 /*GL_ELEMENT_ARRAY_BUFFER*/) {
+        GLctx.currentElementArrayBufferBinding = buffer;
+      }
   
       GLctx.bindBuffer(target, GL.buffers[buffer]);
     };
@@ -6532,6 +6687,8 @@ async function createWasm() {
   /** @suppress {duplicate } */
   var _glBindVertexArray = (vao) => {
       GLctx.bindVertexArray(GL.vaos[vao]);
+      var ibo = GLctx.getParameter(0x8895 /*ELEMENT_ARRAY_BUFFER_BINDING*/);
+      GLctx.currentElementArrayBufferBinding = ibo ? (ibo.name | 0) : 0;
     };
   /** @suppress {duplicate } */
   var _glBindVertexArrayOES = _glBindVertexArray;
@@ -6679,6 +6836,8 @@ async function createWasm() {
         buffer.name = 0;
         GL.buffers[id] = null;
   
+        if (id == GLctx.currentArrayBufferBinding) GLctx.currentArrayBufferBinding = 0;
+        if (id == GLctx.currentElementArrayBufferBinding) GLctx.currentElementArrayBufferBinding = 0;
       }
     };
   var _emscripten_glDeleteBuffers = _glDeleteBuffers;
@@ -6806,15 +6965,20 @@ async function createWasm() {
 
   /** @suppress {duplicate } */
   var _glDisableVertexAttribArray = (index) => {
+      var cb = GL.currentContext.clientBuffers[index];
+      cb.enabled = false;
       GLctx.disableVertexAttribArray(index);
     };
   var _emscripten_glDisableVertexAttribArray = _glDisableVertexAttribArray;
 
   /** @suppress {duplicate } */
   var _glDrawArrays = (mode, first, count) => {
+      // bind any client-side buffers
+      GL.preDrawHandleClientVertexAttribBindings(first + count);
   
       GLctx.drawArrays(mode, first, count);
   
+      GL.postDrawHandleClientVertexAttribBindings();
     };
   var _emscripten_glDrawArrays = _glDrawArrays;
 
@@ -6846,9 +7010,50 @@ async function createWasm() {
 
   /** @suppress {duplicate } */
   var _glDrawElements = (mode, count, type, indices) => {
+      var buf;
+      var vertexes = 0;
+      if (!GLctx.currentElementArrayBufferBinding) {
+        var size = GL.calcBufLength(1, type, 0, count);
+        buf = GL.getTempIndexBuffer(size);
+        GLctx.bindBuffer(0x8893 /*GL_ELEMENT_ARRAY_BUFFER*/, buf);
+        GLctx.bufferSubData(0x8893 /*GL_ELEMENT_ARRAY_BUFFER*/,
+                            0,
+                            HEAPU8.subarray(indices, indices + size));
+        
+        // Calculating vertex count if shader's attribute data is on client side
+        if (count > 0) {
+          for (var i = 0; i < GL.currentContext.maxVertexAttribs; ++i) {
+            var cb = GL.currentContext.clientBuffers[i];
+            if (cb.clientside && cb.enabled) {
+              let arrayClass;
+              switch(type) {
+                case 0x1401 /* GL_UNSIGNED_BYTE */: arrayClass = Uint8Array; break;
+                case 0x1403 /* GL_UNSIGNED_SHORT */: arrayClass = Uint16Array; break;
+                default:
+                  GL.recordError(0x502 /* GL_INVALID_OPERATION */);
+                  return;
+              }
+  
+              vertexes = new arrayClass(HEAPU8.buffer, indices, count).reduce((max, current) => Math.max(max, current)) + 1;
+              break;
+            }
+          }
+        }
+  
+        // the index is now 0
+        indices = 0;
+      }
+  
+      // bind any client-side buffers
+      GL.preDrawHandleClientVertexAttribBindings(vertexes);
   
       GLctx.drawElements(mode, count, type, indices);
   
+      GL.postDrawHandleClientVertexAttribBindings(count);
+  
+      if (!GLctx.currentElementArrayBufferBinding) {
+        GLctx.bindBuffer(0x8893 /*GL_ELEMENT_ARRAY_BUFFER*/, null);
+      }
     };
   var _emscripten_glDrawElements = _glDrawElements;
 
@@ -6867,6 +7072,8 @@ async function createWasm() {
 
   /** @suppress {duplicate } */
   var _glEnableVertexAttribArray = (index) => {
+      var cb = GL.currentContext.clientBuffers[index];
+      cb.enabled = true;
       GLctx.enableVertexAttribArray(index);
     };
   var _emscripten_glEnableVertexAttribArray = _glEnableVertexAttribArray;
@@ -7621,6 +7828,9 @@ async function createWasm() {
         GL.recordError(0x501 /* GL_INVALID_VALUE */);
         return;
       }
+      if (GL.currentContext.clientBuffers[index].enabled) {
+        err("glGetVertexAttribPointer on client-side array: not supported, bad data returned");
+      }
       HEAP32[((pointer)>>2)] = GLctx.getVertexAttribOffset(index, pname);
     };
   var _emscripten_glGetVertexAttribPointerv = _glGetVertexAttribPointerv;
@@ -7633,6 +7843,9 @@ async function createWasm() {
         // null, issue a GL error to notify user about it.
         GL.recordError(0x501 /* GL_INVALID_VALUE */);
         return;
+      }
+      if (GL.currentContext.clientBuffers[index].enabled) {
+        err("glGetVertexAttrib*v on client-side array: not supported, bad data returned");
       }
       var data = GLctx.getVertexAttrib(index, pname);
       if (pname == 0x889F/*VERTEX_ATTRIB_ARRAY_BUFFER_BINDING*/) {
@@ -8355,6 +8568,20 @@ async function createWasm() {
 
   /** @suppress {duplicate } */
   var _glVertexAttribPointer = (index, size, type, normalized, stride, ptr) => {
+      var cb = GL.currentContext.clientBuffers[index];
+      if (!GLctx.currentArrayBufferBinding) {
+        cb.size = size;
+        cb.type = type;
+        cb.normalized = normalized;
+        cb.stride = stride;
+        cb.ptr = ptr;
+        cb.clientside = true;
+        cb.vertexAttribPointerAdaptor = function(index, size, type, normalized, stride, ptr) {
+          this.vertexAttribPointer(index, size, type, normalized, stride, ptr);
+        };
+        return;
+      }
+      cb.clientside = false;
       GLctx.vertexAttribPointer(index, size, type, !!normalized, stride, ptr);
     };
   var _emscripten_glVertexAttribPointer = _glVertexAttribPointer;
@@ -9226,6 +9453,34 @@ async function createWasm() {
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
   /** @param {Object=} elements */
   var autoResumeAudioContext = (ctx, elements) => {
       if (!elements) {
@@ -9272,6 +9527,11 @@ async function createWasm() {
   FS.createPreloadedFile = FS_createPreloadedFile;
   FS.preloadFile = FS_preloadFile;
   FS.staticInit();;
+
+      // Signal GL rendering layer that processing of a new frame is about to
+      // start. This helps it optimize VBO double-buffering and reduce GPU stalls.
+      registerPreMainLoop(() => GL.newRenderingFrameStarted());
+    ;
 
       Module['requestAnimationFrame'] = MainLoop.requestAnimationFrame;
       Module['pauseMainLoop'] = MainLoop.pause;
@@ -9406,7 +9666,6 @@ if (Module['wasmBinary']) wasmBinary = Module['wasmBinary'];
   'setImmediateWrapped',
   'clearImmediateWrapped',
   'registerPostMainLoop',
-  'registerPreMainLoop',
   'getPromise',
   'makePromise',
   'idsToPromises',
@@ -9556,6 +9815,7 @@ missingLibrarySymbols.forEach(missingLibrarySymbol)
   'emSetImmediate',
   'emClearImmediate_deps',
   'emClearImmediate',
+  'registerPreMainLoop',
   'promiseMap',
   'uncaughtExceptionCount',
   'exceptionLast',
@@ -9743,22 +10003,21 @@ function checkIncomingModuleAPI() {
   ignoredModuleProp('fetchSettings');
 }
 var ASM_CONSTS = {
-  242736: ($0) => { var str = UTF8ToString($0) + '\n\n' + 'Abort/Retry/Ignore/AlwaysIgnore? [ariA] :'; var reply = window.prompt(str, "i"); if (reply === null) { reply = "i"; } return reply.length === 1 ? reply.charCodeAt(0) : -1; },  
- 242951: () => { if (typeof(AudioContext) !== 'undefined') { return true; } else if (typeof(webkitAudioContext) !== 'undefined') { return true; } return false; },  
- 243098: () => { if ((typeof(navigator.mediaDevices) !== 'undefined') && (typeof(navigator.mediaDevices.getUserMedia) !== 'undefined')) { return true; } else if (typeof(navigator.webkitGetUserMedia) !== 'undefined') { return true; } return false; },  
- 243332: ($0) => { if(typeof(Module['SDL2']) === 'undefined') { Module['SDL2'] = {}; } var SDL2 = Module['SDL2']; if (!$0) { SDL2.audio = {}; } else { SDL2.capture = {}; } if (!SDL2.audioContext) { if (typeof(AudioContext) !== 'undefined') { SDL2.audioContext = new AudioContext(); } else if (typeof(webkitAudioContext) !== 'undefined') { SDL2.audioContext = new webkitAudioContext(); } if (SDL2.audioContext) { if ((typeof navigator.userActivation) === 'undefined') { autoResumeAudioContext(SDL2.audioContext); } } } return SDL2.audioContext === undefined ? -1 : 0; },  
- 243884: () => { var SDL2 = Module['SDL2']; return SDL2.audioContext.sampleRate; },  
- 243952: ($0, $1, $2, $3) => { var SDL2 = Module['SDL2']; var have_microphone = function(stream) { if (SDL2.capture.silenceTimer !== undefined) { clearInterval(SDL2.capture.silenceTimer); SDL2.capture.silenceTimer = undefined; SDL2.capture.silenceBuffer = undefined } SDL2.capture.mediaStreamNode = SDL2.audioContext.createMediaStreamSource(stream); SDL2.capture.scriptProcessorNode = SDL2.audioContext.createScriptProcessor($1, $0, 1); SDL2.capture.scriptProcessorNode.onaudioprocess = function(audioProcessingEvent) { if ((SDL2 === undefined) || (SDL2.capture === undefined)) { return; } audioProcessingEvent.outputBuffer.getChannelData(0).fill(0.0); SDL2.capture.currentCaptureBuffer = audioProcessingEvent.inputBuffer; dynCall('vp', $2, [$3]); }; SDL2.capture.mediaStreamNode.connect(SDL2.capture.scriptProcessorNode); SDL2.capture.scriptProcessorNode.connect(SDL2.audioContext.destination); SDL2.capture.stream = stream; }; var no_microphone = function(error) { }; SDL2.capture.silenceBuffer = SDL2.audioContext.createBuffer($0, $1, SDL2.audioContext.sampleRate); SDL2.capture.silenceBuffer.getChannelData(0).fill(0.0); var silence_callback = function() { SDL2.capture.currentCaptureBuffer = SDL2.capture.silenceBuffer; dynCall('vp', $2, [$3]); }; SDL2.capture.silenceTimer = setInterval(silence_callback, ($1 / SDL2.audioContext.sampleRate) * 1000); if ((navigator.mediaDevices !== undefined) && (navigator.mediaDevices.getUserMedia !== undefined)) { navigator.mediaDevices.getUserMedia({ audio: true, video: false }).then(have_microphone).catch(no_microphone); } else if (navigator.webkitGetUserMedia !== undefined) { navigator.webkitGetUserMedia({ audio: true, video: false }, have_microphone, no_microphone); } },  
- 245645: ($0, $1, $2, $3) => { var SDL2 = Module['SDL2']; SDL2.audio.scriptProcessorNode = SDL2.audioContext['createScriptProcessor']($1, 0, $0); SDL2.audio.scriptProcessorNode['onaudioprocess'] = function (e) { if ((SDL2 === undefined) || (SDL2.audio === undefined)) { return; } if (SDL2.audio.silenceTimer !== undefined) { clearInterval(SDL2.audio.silenceTimer); SDL2.audio.silenceTimer = undefined; SDL2.audio.silenceBuffer = undefined; } SDL2.audio.currentOutputBuffer = e['outputBuffer']; dynCall('vp', $2, [$3]); }; SDL2.audio.scriptProcessorNode['connect'](SDL2.audioContext['destination']); if (SDL2.audioContext.state === 'suspended') { SDL2.audio.silenceBuffer = SDL2.audioContext.createBuffer($0, $1, SDL2.audioContext.sampleRate); SDL2.audio.silenceBuffer.getChannelData(0).fill(0.0); var silence_callback = function() { if ((typeof navigator.userActivation) !== 'undefined') { if (navigator.userActivation.hasBeenActive) { SDL2.audioContext.resume(); } } SDL2.audio.currentOutputBuffer = SDL2.audio.silenceBuffer; dynCall('vp', $2, [$3]); SDL2.audio.currentOutputBuffer = undefined; }; SDL2.audio.silenceTimer = setInterval(silence_callback, ($1 / SDL2.audioContext.sampleRate) * 1000); } },  
- 246820: ($0, $1) => { var SDL2 = Module['SDL2']; var numChannels = SDL2.capture.currentCaptureBuffer.numberOfChannels; for (var c = 0; c < numChannels; ++c) { var channelData = SDL2.capture.currentCaptureBuffer.getChannelData(c); if (channelData.length != $1) { throw 'Web Audio capture buffer length mismatch! Destination size: ' + channelData.length + ' samples vs expected ' + $1 + ' samples!'; } if (numChannels == 1) { for (var j = 0; j < $1; ++j) { setValue($0 + (j * 4), channelData[j], 'float'); } } else { for (var j = 0; j < $1; ++j) { setValue($0 + (((j * numChannels) + c) * 4), channelData[j], 'float'); } } } },  
- 247425: ($0, $1) => { var SDL2 = Module['SDL2']; var buf = $0 >>> 2; var numChannels = SDL2.audio.currentOutputBuffer['numberOfChannels']; for (var c = 0; c < numChannels; ++c) { var channelData = SDL2.audio.currentOutputBuffer['getChannelData'](c); if (channelData.length != $1) { throw 'Web Audio output buffer length mismatch! Destination size: ' + channelData.length + ' samples vs expected ' + $1 + ' samples!'; } for (var j = 0; j < $1; ++j) { channelData[j] = HEAPF32[buf + (j*numChannels + c)]; } } },  
- 247914: ($0) => { var SDL2 = Module['SDL2']; if ($0) { if (SDL2.capture.silenceTimer !== undefined) { clearInterval(SDL2.capture.silenceTimer); } if (SDL2.capture.stream !== undefined) { var tracks = SDL2.capture.stream.getAudioTracks(); for (var i = 0; i < tracks.length; i++) { SDL2.capture.stream.removeTrack(tracks[i]); } } if (SDL2.capture.scriptProcessorNode !== undefined) { SDL2.capture.scriptProcessorNode.onaudioprocess = function(audioProcessingEvent) {}; SDL2.capture.scriptProcessorNode.disconnect(); } if (SDL2.capture.mediaStreamNode !== undefined) { SDL2.capture.mediaStreamNode.disconnect(); } SDL2.capture = undefined; } else { if (SDL2.audio.scriptProcessorNode != undefined) { SDL2.audio.scriptProcessorNode.disconnect(); } if (SDL2.audio.silenceTimer !== undefined) { clearInterval(SDL2.audio.silenceTimer); } SDL2.audio = undefined; } if ((SDL2.audioContext !== undefined) && (SDL2.audio === undefined) && (SDL2.capture === undefined)) { SDL2.audioContext.close(); SDL2.audioContext = undefined; } },  
- 248920: ($0, $1, $2) => { var w = $0; var h = $1; var pixels = $2; if (!Module['SDL2']) Module['SDL2'] = {}; var SDL2 = Module['SDL2']; if (SDL2.ctxCanvas !== Module['canvas']) { SDL2.ctx = Browser.createContext(Module['canvas'], false, true); SDL2.ctxCanvas = Module['canvas']; } if (SDL2.w !== w || SDL2.h !== h || SDL2.imageCtx !== SDL2.ctx) { SDL2.image = SDL2.ctx.createImageData(w, h); SDL2.w = w; SDL2.h = h; SDL2.imageCtx = SDL2.ctx; } var data = SDL2.image.data; var src = pixels / 4; var dst = 0; var num; if (typeof CanvasPixelArray !== 'undefined' && data instanceof CanvasPixelArray) { num = data.length; while (dst < num) { var val = HEAP32[src]; data[dst ] = val & 0xff; data[dst+1] = (val >> 8) & 0xff; data[dst+2] = (val >> 16) & 0xff; data[dst+3] = 0xff; src++; dst += 4; } } else { if (SDL2.data32Data !== data) { SDL2.data32 = new Int32Array(data.buffer); SDL2.data8 = new Uint8Array(data.buffer); SDL2.data32Data = data; } var data32 = SDL2.data32; num = data32.length; data32.set(HEAP32.subarray(src, src + num)); var data8 = SDL2.data8; var i = 3; var j = i + 4*num; if (num % 8 == 0) { while (i < j) { data8[i] = 0xff; i = i + 4 | 0; data8[i] = 0xff; i = i + 4 | 0; data8[i] = 0xff; i = i + 4 | 0; data8[i] = 0xff; i = i + 4 | 0; data8[i] = 0xff; i = i + 4 | 0; data8[i] = 0xff; i = i + 4 | 0; data8[i] = 0xff; i = i + 4 | 0; data8[i] = 0xff; i = i + 4 | 0; } } else { while (i < j) { data8[i] = 0xff; i = i + 4 | 0; } } } SDL2.ctx.putImageData(SDL2.image, 0, 0); },  
- 250386: ($0, $1, $2, $3, $4) => { var w = $0; var h = $1; var hot_x = $2; var hot_y = $3; var pixels = $4; var canvas = document.createElement("canvas"); canvas.width = w; canvas.height = h; var ctx = canvas.getContext("2d"); var image = ctx.createImageData(w, h); var data = image.data; var src = pixels / 4; var dst = 0; var num; if (typeof CanvasPixelArray !== 'undefined' && data instanceof CanvasPixelArray) { num = data.length; while (dst < num) { var val = HEAP32[src]; data[dst ] = val & 0xff; data[dst+1] = (val >> 8) & 0xff; data[dst+2] = (val >> 16) & 0xff; data[dst+3] = (val >> 24) & 0xff; src++; dst += 4; } } else { var data32 = new Int32Array(data.buffer); num = data32.length; data32.set(HEAP32.subarray(src, src + num)); } ctx.putImageData(image, 0, 0); var url = hot_x === 0 && hot_y === 0 ? "url(" + canvas.toDataURL() + "), auto" : "url(" + canvas.toDataURL() + ") " + hot_x + " " + hot_y + ", auto"; var urlBuf = _malloc(url.length + 1); stringToUTF8(url, urlBuf, url.length + 1); return urlBuf; },  
- 251374: ($0) => { if (Module['canvas']) { Module['canvas'].style['cursor'] = UTF8ToString($0); } },  
- 251457: () => { if (Module['canvas']) { Module['canvas'].style['cursor'] = 'none'; } },  
- 251526: () => { return window.innerWidth; },  
- 251556: () => { return window.innerHeight; }
+  246405: () => { if (typeof(AudioContext) !== 'undefined') { return true; } else if (typeof(webkitAudioContext) !== 'undefined') { return true; } return false; },  
+ 246552: () => { if ((typeof(navigator.mediaDevices) !== 'undefined') && (typeof(navigator.mediaDevices.getUserMedia) !== 'undefined')) { return true; } else if (typeof(navigator.webkitGetUserMedia) !== 'undefined') { return true; } return false; },  
+ 246786: ($0) => { if(typeof(Module['SDL2']) === 'undefined') { Module['SDL2'] = {}; } var SDL2 = Module['SDL2']; if (!$0) { SDL2.audio = {}; } else { SDL2.capture = {}; } if (!SDL2.audioContext) { if (typeof(AudioContext) !== 'undefined') { SDL2.audioContext = new AudioContext(); } else if (typeof(webkitAudioContext) !== 'undefined') { SDL2.audioContext = new webkitAudioContext(); } if (SDL2.audioContext) { if ((typeof navigator.userActivation) === 'undefined') { autoResumeAudioContext(SDL2.audioContext); } } } return SDL2.audioContext === undefined ? -1 : 0; },  
+ 247338: () => { var SDL2 = Module['SDL2']; return SDL2.audioContext.sampleRate; },  
+ 247406: ($0, $1, $2, $3) => { var SDL2 = Module['SDL2']; var have_microphone = function(stream) { if (SDL2.capture.silenceTimer !== undefined) { clearInterval(SDL2.capture.silenceTimer); SDL2.capture.silenceTimer = undefined; SDL2.capture.silenceBuffer = undefined } SDL2.capture.mediaStreamNode = SDL2.audioContext.createMediaStreamSource(stream); SDL2.capture.scriptProcessorNode = SDL2.audioContext.createScriptProcessor($1, $0, 1); SDL2.capture.scriptProcessorNode.onaudioprocess = function(audioProcessingEvent) { if ((SDL2 === undefined) || (SDL2.capture === undefined)) { return; } audioProcessingEvent.outputBuffer.getChannelData(0).fill(0.0); SDL2.capture.currentCaptureBuffer = audioProcessingEvent.inputBuffer; dynCall('vp', $2, [$3]); }; SDL2.capture.mediaStreamNode.connect(SDL2.capture.scriptProcessorNode); SDL2.capture.scriptProcessorNode.connect(SDL2.audioContext.destination); SDL2.capture.stream = stream; }; var no_microphone = function(error) { }; SDL2.capture.silenceBuffer = SDL2.audioContext.createBuffer($0, $1, SDL2.audioContext.sampleRate); SDL2.capture.silenceBuffer.getChannelData(0).fill(0.0); var silence_callback = function() { SDL2.capture.currentCaptureBuffer = SDL2.capture.silenceBuffer; dynCall('vp', $2, [$3]); }; SDL2.capture.silenceTimer = setInterval(silence_callback, ($1 / SDL2.audioContext.sampleRate) * 1000); if ((navigator.mediaDevices !== undefined) && (navigator.mediaDevices.getUserMedia !== undefined)) { navigator.mediaDevices.getUserMedia({ audio: true, video: false }).then(have_microphone).catch(no_microphone); } else if (navigator.webkitGetUserMedia !== undefined) { navigator.webkitGetUserMedia({ audio: true, video: false }, have_microphone, no_microphone); } },  
+ 249099: ($0, $1, $2, $3) => { var SDL2 = Module['SDL2']; SDL2.audio.scriptProcessorNode = SDL2.audioContext['createScriptProcessor']($1, 0, $0); SDL2.audio.scriptProcessorNode['onaudioprocess'] = function (e) { if ((SDL2 === undefined) || (SDL2.audio === undefined)) { return; } if (SDL2.audio.silenceTimer !== undefined) { clearInterval(SDL2.audio.silenceTimer); SDL2.audio.silenceTimer = undefined; SDL2.audio.silenceBuffer = undefined; } SDL2.audio.currentOutputBuffer = e['outputBuffer']; dynCall('vp', $2, [$3]); }; SDL2.audio.scriptProcessorNode['connect'](SDL2.audioContext['destination']); if (SDL2.audioContext.state === 'suspended') { SDL2.audio.silenceBuffer = SDL2.audioContext.createBuffer($0, $1, SDL2.audioContext.sampleRate); SDL2.audio.silenceBuffer.getChannelData(0).fill(0.0); var silence_callback = function() { if ((typeof navigator.userActivation) !== 'undefined') { if (navigator.userActivation.hasBeenActive) { SDL2.audioContext.resume(); } } SDL2.audio.currentOutputBuffer = SDL2.audio.silenceBuffer; dynCall('vp', $2, [$3]); SDL2.audio.currentOutputBuffer = undefined; }; SDL2.audio.silenceTimer = setInterval(silence_callback, ($1 / SDL2.audioContext.sampleRate) * 1000); } },  
+ 250274: ($0, $1) => { var SDL2 = Module['SDL2']; var numChannels = SDL2.capture.currentCaptureBuffer.numberOfChannels; for (var c = 0; c < numChannels; ++c) { var channelData = SDL2.capture.currentCaptureBuffer.getChannelData(c); if (channelData.length != $1) { throw 'Web Audio capture buffer length mismatch! Destination size: ' + channelData.length + ' samples vs expected ' + $1 + ' samples!'; } if (numChannels == 1) { for (var j = 0; j < $1; ++j) { setValue($0 + (j * 4), channelData[j], 'float'); } } else { for (var j = 0; j < $1; ++j) { setValue($0 + (((j * numChannels) + c) * 4), channelData[j], 'float'); } } } },  
+ 250879: ($0, $1) => { var SDL2 = Module['SDL2']; var buf = $0 >>> 2; var numChannels = SDL2.audio.currentOutputBuffer['numberOfChannels']; for (var c = 0; c < numChannels; ++c) { var channelData = SDL2.audio.currentOutputBuffer['getChannelData'](c); if (channelData.length != $1) { throw 'Web Audio output buffer length mismatch! Destination size: ' + channelData.length + ' samples vs expected ' + $1 + ' samples!'; } for (var j = 0; j < $1; ++j) { channelData[j] = HEAPF32[buf + (j*numChannels + c)]; } } },  
+ 251368: ($0) => { var SDL2 = Module['SDL2']; if ($0) { if (SDL2.capture.silenceTimer !== undefined) { clearInterval(SDL2.capture.silenceTimer); } if (SDL2.capture.stream !== undefined) { var tracks = SDL2.capture.stream.getAudioTracks(); for (var i = 0; i < tracks.length; i++) { SDL2.capture.stream.removeTrack(tracks[i]); } } if (SDL2.capture.scriptProcessorNode !== undefined) { SDL2.capture.scriptProcessorNode.onaudioprocess = function(audioProcessingEvent) {}; SDL2.capture.scriptProcessorNode.disconnect(); } if (SDL2.capture.mediaStreamNode !== undefined) { SDL2.capture.mediaStreamNode.disconnect(); } SDL2.capture = undefined; } else { if (SDL2.audio.scriptProcessorNode != undefined) { SDL2.audio.scriptProcessorNode.disconnect(); } if (SDL2.audio.silenceTimer !== undefined) { clearInterval(SDL2.audio.silenceTimer); } SDL2.audio = undefined; } if ((SDL2.audioContext !== undefined) && (SDL2.audio === undefined) && (SDL2.capture === undefined)) { SDL2.audioContext.close(); SDL2.audioContext = undefined; } },  
+ 252374: ($0, $1, $2) => { var w = $0; var h = $1; var pixels = $2; if (!Module['SDL2']) Module['SDL2'] = {}; var SDL2 = Module['SDL2']; if (SDL2.ctxCanvas !== Module['canvas']) { SDL2.ctx = Browser.createContext(Module['canvas'], false, true); SDL2.ctxCanvas = Module['canvas']; } if (SDL2.w !== w || SDL2.h !== h || SDL2.imageCtx !== SDL2.ctx) { SDL2.image = SDL2.ctx.createImageData(w, h); SDL2.w = w; SDL2.h = h; SDL2.imageCtx = SDL2.ctx; } var data = SDL2.image.data; var src = pixels / 4; var dst = 0; var num; if (typeof CanvasPixelArray !== 'undefined' && data instanceof CanvasPixelArray) { num = data.length; while (dst < num) { var val = HEAP32[src]; data[dst ] = val & 0xff; data[dst+1] = (val >> 8) & 0xff; data[dst+2] = (val >> 16) & 0xff; data[dst+3] = 0xff; src++; dst += 4; } } else { if (SDL2.data32Data !== data) { SDL2.data32 = new Int32Array(data.buffer); SDL2.data8 = new Uint8Array(data.buffer); SDL2.data32Data = data; } var data32 = SDL2.data32; num = data32.length; data32.set(HEAP32.subarray(src, src + num)); var data8 = SDL2.data8; var i = 3; var j = i + 4*num; if (num % 8 == 0) { while (i < j) { data8[i] = 0xff; i = i + 4 | 0; data8[i] = 0xff; i = i + 4 | 0; data8[i] = 0xff; i = i + 4 | 0; data8[i] = 0xff; i = i + 4 | 0; data8[i] = 0xff; i = i + 4 | 0; data8[i] = 0xff; i = i + 4 | 0; data8[i] = 0xff; i = i + 4 | 0; data8[i] = 0xff; i = i + 4 | 0; } } else { while (i < j) { data8[i] = 0xff; i = i + 4 | 0; } } } SDL2.ctx.putImageData(SDL2.image, 0, 0); },  
+ 253840: ($0, $1, $2, $3, $4) => { var w = $0; var h = $1; var hot_x = $2; var hot_y = $3; var pixels = $4; var canvas = document.createElement("canvas"); canvas.width = w; canvas.height = h; var ctx = canvas.getContext("2d"); var image = ctx.createImageData(w, h); var data = image.data; var src = pixels / 4; var dst = 0; var num; if (typeof CanvasPixelArray !== 'undefined' && data instanceof CanvasPixelArray) { num = data.length; while (dst < num) { var val = HEAP32[src]; data[dst ] = val & 0xff; data[dst+1] = (val >> 8) & 0xff; data[dst+2] = (val >> 16) & 0xff; data[dst+3] = (val >> 24) & 0xff; src++; dst += 4; } } else { var data32 = new Int32Array(data.buffer); num = data32.length; data32.set(HEAP32.subarray(src, src + num)); } ctx.putImageData(image, 0, 0); var url = hot_x === 0 && hot_y === 0 ? "url(" + canvas.toDataURL() + "), auto" : "url(" + canvas.toDataURL() + ") " + hot_x + " " + hot_y + ", auto"; var urlBuf = _malloc(url.length + 1); stringToUTF8(url, urlBuf, url.length + 1); return urlBuf; },  
+ 254828: ($0) => { if (Module['canvas']) { Module['canvas'].style['cursor'] = UTF8ToString($0); } },  
+ 254911: () => { if (Module['canvas']) { Module['canvas'].style['cursor'] = 'none'; } },  
+ 254980: () => { return window.innerWidth; },  
+ 255010: () => { return window.innerHeight; }
 };
 
 // Imports from the Wasm binary.
@@ -9793,142 +10052,148 @@ function assignWasmExports(wasmExports) {
   __emscripten_stack_restore = wasmExports['_emscripten_stack_restore'];
   __emscripten_stack_alloc = wasmExports['_emscripten_stack_alloc'];
 }
-var __D3std8internal14unicode_decomp11__moduleRefZ = Module['__D3std8internal14unicode_decomp11__moduleRefZ'] = 242208;
-var __D3std8internal12unicode_norm11__moduleRefZ = Module['__D3std8internal12unicode_norm11__moduleRefZ'] = 242212;
-var __D3std8internal12unicode_comp11__moduleRefZ = Module['__D3std8internal12unicode_comp11__moduleRefZ'] = 242216;
-var __D3std4math12trigonometry11__moduleRefZ = Module['__D3std4math12trigonometry11__moduleRefZ'] = 242220;
-var __D3std4math8rounding11__moduleRefZ = Module['__D3std4math8rounding11__moduleRefZ'] = 242224;
-var __D3std4math9remainder11__moduleRefZ = Module['__D3std4math9remainder11__moduleRefZ'] = 242228;
-var __D3std4math10operations11__moduleRefZ = Module['__D3std4math10operations11__moduleRefZ'] = 242232;
-var __D3std4math11exponential11__moduleRefZ = Module['__D3std4math11exponential11__moduleRefZ'] = 242236;
-var __D3std4math9constants11__moduleRefZ = Module['__D3std4math9constants11__moduleRefZ'] = 242240;
-var __D3std4math11__moduleRefZ = Module['__D3std4math11__moduleRefZ'] = 242244;
-var __D3std11concurrency11__moduleRefZ = Module['__D3std11concurrency11__moduleRefZ'] = 242248;
-var __D3std8internal6memory11__moduleRefZ = Module['__D3std8internal6memory11__moduleRefZ'] = 242252;
-var __D3std4math8hardware11__moduleRefZ = Module['__D3std4math8hardware11__moduleRefZ'] = 242256;
-var __D3std6system11__moduleRefZ = Module['__D3std6system11__moduleRefZ'] = 242260;
-var __D3std8bitmanip11__moduleRefZ = Module['__D3std8bitmanip11__moduleRefZ'] = 242264;
-var __D3std12experimental9allocator6common11__moduleRefZ = Module['__D3std12experimental9allocator6common11__moduleRefZ'] = 242268;
-var __D3std10checkedint11__moduleRefZ = Module['__D3std10checkedint11__moduleRefZ'] = 242272;
-var __D3std3utf11__moduleRefZ = Module['__D3std3utf11__moduleRefZ'] = 242276;
-var __D3std4math6traits11__moduleRefZ = Module['__D3std4math6traits11__moduleRefZ'] = 242280;
-var __D3std4math9algebraic11__moduleRefZ = Module['__D3std4math9algebraic11__moduleRefZ'] = 242284;
-var __D3std8internal16unicode_grapheme11__moduleRefZ = Module['__D3std8internal16unicode_grapheme11__moduleRefZ'] = 242288;
-var __D3std8internal14unicode_tables11__moduleRefZ = Module['__D3std8internal14unicode_tables11__moduleRefZ'] = 242292;
-var __D3std3uni11__moduleRefZ = Module['__D3std3uni11__moduleRefZ'] = 242296;
-var __D3std6string11__moduleRefZ = Module['__D3std6string11__moduleRefZ'] = 242300;
-var __D3std4path11__moduleRefZ = Module['__D3std4path11__moduleRefZ'] = 242304;
-var __D3std9algorithm7sorting11__moduleRefZ = Module['__D3std9algorithm7sorting11__moduleRefZ'] = 242308;
-var __D3std9algorithm6setops11__moduleRefZ = Module['__D3std9algorithm6setops11__moduleRefZ'] = 242312;
-var __D3std9algorithm9searching11__moduleRefZ = Module['__D3std9algorithm9searching11__moduleRefZ'] = 242316;
-var __D3std9algorithm9iteration11__moduleRefZ = Module['__D3std9algorithm9iteration11__moduleRefZ'] = 242320;
-var __D3std9algorithm10comparison11__moduleRefZ = Module['__D3std9algorithm10comparison11__moduleRefZ'] = 242324;
-var __D3std9algorithm11__moduleRefZ = Module['__D3std9algorithm11__moduleRefZ'] = 242328;
-var __D3std9algorithm8mutation11__moduleRefZ = Module['__D3std9algorithm8mutation11__moduleRefZ'] = 242332;
-var __D3std5stdio11__moduleRefZ = Module['__D3std5stdio11__moduleRefZ'] = 242336;
-var __D3std5range10interfaces11__moduleRefZ = Module['__D3std5range10interfaces11__moduleRefZ'] = 242340;
-var __D3std5ascii11__moduleRefZ = Module['__D3std5ascii11__moduleRefZ'] = 242344;
-var __D3std4conv11__moduleRefZ = Module['__D3std4conv11__moduleRefZ'] = 242348;
-var __D3std10functional11__moduleRefZ = Module['__D3std10functional11__moduleRefZ'] = 242352;
-var __D3std5array11__moduleRefZ = Module['__D3std5array11__moduleRefZ'] = 242356;
-var __D3std5range11__moduleRefZ = Module['__D3std5range11__moduleRefZ'] = 242360;
-var __D3std8internal7cstring11__moduleRefZ = Module['__D3std8internal7cstring11__moduleRefZ'] = 242364;
-var __D3std8datetime8timezone11__moduleRefZ = Module['__D3std8datetime8timezone11__moduleRefZ'] = 242368;
-var __D3std6format8internal4read11__moduleRefZ = Module['__D3std6format8internal4read11__moduleRefZ'] = 242372;
-var __D3std6format4read11__moduleRefZ = Module['__D3std6format4read11__moduleRefZ'] = 242376;
-var __D3std6format11__moduleRefZ = Module['__D3std6format11__moduleRefZ'] = 242380;
-var __D3std9exception11__moduleRefZ = Module['__D3std9exception11__moduleRefZ'] = 242384;
-var __D3std8datetime7systime11__moduleRefZ = Module['__D3std8datetime7systime11__moduleRefZ'] = 242388;
-var __D3std8internal10attributes11__moduleRefZ = Module['__D3std8internal10attributes11__moduleRefZ'] = 242392;
-var __D3std6format8internal5write11__moduleRefZ = Module['__D3std6format8internal5write11__moduleRefZ'] = 242396;
-var __D3std6format5write11__moduleRefZ = Module['__D3std6format5write11__moduleRefZ'] = 242400;
-var __D3std6format4spec11__moduleRefZ = Module['__D3std6format4spec11__moduleRefZ'] = 242404;
-var __D3std8typecons11__moduleRefZ = Module['__D3std8typecons11__moduleRefZ'] = 242408;
-var __D3std5range10primitives11__moduleRefZ = Module['__D3std5range10primitives11__moduleRefZ'] = 242412;
-var __D3std4meta11__moduleRefZ = Module['__D3std4meta11__moduleRefZ'] = 242416;
-var __D3std6traits11__moduleRefZ = Module['__D3std6traits11__moduleRefZ'] = 242420;
-var __D3std8datetime4date11__moduleRefZ = Module['__D3std8datetime4date11__moduleRefZ'] = 242424;
-var __D3std4file11__moduleRefZ = Module['__D3std4file11__moduleRefZ'] = 242428;
-var __D3app11__moduleRefZ = Module['__D3app11__moduleRefZ'] = 242432;
-var __D6assets5cache11__moduleRefZ = Module['__D6assets5cache11__moduleRefZ'] = 242436;
-var __D4core5bitop11__moduleRefZ = Module['__D4core5bitop11__moduleRefZ'] = 242708;
-var __D4core8demangle11__moduleRefZ = Module['__D4core8demangle11__moduleRefZ'] = 242512;
-var __D4core9exception11__moduleRefZ = Module['__D4core9exception11__moduleRefZ'] = 242440;
-var __D4core2gc6config11__moduleRefZ = Module['__D4core2gc6config11__moduleRefZ'] = 242468;
-var __D4core2gc11gcinterface11__moduleRefZ = Module['__D4core2gc11gcinterface11__moduleRefZ'] = 242452;
-var __D4core2gc8registry11__moduleRefZ = Module['__D4core2gc8registry11__moduleRefZ'] = 242456;
-var __D4core8internal5abort11__moduleRefZ = Module['__D4core8internal5abort11__moduleRefZ'] = 242560;
-var __D4core8internal5array9appending11__moduleRefZ = Module['__D4core8internal5array9appending11__moduleRefZ'] = 242504;
-var __D4core8internal5array8capacity11__moduleRefZ = Module['__D4core8internal5array8capacity11__moduleRefZ'] = 242588;
-var __D4core8internal5array13concatenation11__moduleRefZ = Module['__D4core8internal5array13concatenation11__moduleRefZ'] = 242604;
-var __D4core8internal5array8equality11__moduleRefZ = Module['__D4core8internal5array8equality11__moduleRefZ'] = 242508;
-var __D4core8internal9backtrace5dwarf11__moduleRefZ = Module['__D4core8internal9backtrace5dwarf11__moduleRefZ'] = 242528;
-var __D4core8internal9backtrace3elf11__moduleRefZ = Module['__D4core8internal9backtrace3elf11__moduleRefZ'] = 242524;
-var __D4core8internal9backtrace6unwind11__moduleRefZ = Module['__D4core8internal9backtrace6unwind11__moduleRefZ'] = 242444;
-var __D4core8internal9container5array11__moduleRefZ = Module['__D4core8internal9container5array11__moduleRefZ'] = 242488;
-var __D4core8internal9container6common11__moduleRefZ = Module['__D4core8internal9container6common11__moduleRefZ'] = 242460;
-var __D4core8internal9container7hashtab11__moduleRefZ = Module['__D4core8internal9container7hashtab11__moduleRefZ'] = 242704;
-var __D4core8internal9container5treap11__moduleRefZ = Module['__D4core8internal9container5treap11__moduleRefZ'] = 242464;
-var __D4core8internal7convert11__moduleRefZ = Module['__D4core8internal7convert11__moduleRefZ'] = 242612;
-var __D4core8internal7dassert11__moduleRefZ = Module['__D4core8internal7dassert11__moduleRefZ'] = 242448;
-var __D4core8internal11destruction11__moduleRefZ = Module['__D4core8internal11destruction11__moduleRefZ'] = 242620;
-var __D4core8internal3elf2dl11__moduleRefZ = Module['__D4core8internal3elf2dl11__moduleRefZ'] = 242520;
-var __D4core8internal3elf2io11__moduleRefZ = Module['__D4core8internal3elf2io11__moduleRefZ'] = 242516;
-var __D4core8internal2gc4bits11__moduleRefZ = Module['__D4core8internal2gc4bits11__moduleRefZ'] = 242480;
-var __D4core8internal2gc4impl12conservativeQw11__moduleRefZ = Module['__D4core8internal2gc4impl12conservativeQw11__moduleRefZ'] = 242484;
-var __D4core8internal2gc4impl6manualQp11__moduleRefZ = Module['__D4core8internal2gc4impl6manualQp11__moduleRefZ'] = 242492;
-var __D4core8internal2gc4impl5protoQo11__moduleRefZ = Module['__D4core8internal2gc4impl5protoQo11__moduleRefZ'] = 242496;
-var __D4core8internal2gc2os11__moduleRefZ = Module['__D4core8internal2gc2os11__moduleRefZ'] = 242476;
-var __D4core8internal2gc9pooltable11__moduleRefZ = Module['__D4core8internal2gc9pooltable11__moduleRefZ'] = 242472;
-var __D4core8internal2gc5proxy11__moduleRefZ = Module['__D4core8internal2gc5proxy11__moduleRefZ'] = 242500;
-var __D4core8internal4hash11__moduleRefZ = Module['__D4core8internal4hash11__moduleRefZ'] = 242616;
-var __D4core8internal8lifetime11__moduleRefZ = Module['__D4core8internal8lifetime11__moduleRefZ'] = 242532;
-var __D4core8internal12parseoptions11__moduleRefZ = Module['__D4core8internal12parseoptions11__moduleRefZ'] = 242536;
-var __D4core8internal8spinlock11__moduleRefZ = Module['__D4core8internal8spinlock11__moduleRefZ'] = 242540;
-var __D4core8internal6string11__moduleRefZ = Module['__D4core8internal6string11__moduleRefZ'] = 242544;
-var __D4core8internal7switch_11__moduleRefZ = Module['__D4core8internal7switch_11__moduleRefZ'] = 242548;
-var __D4core8internal3utf11__moduleRefZ = Module['__D4core8internal3utf11__moduleRefZ'] = 242628;
-var __D4core8internal4util5array11__moduleRefZ = Module['__D4core8internal4util5array11__moduleRefZ'] = 242648;
-var __D4core8internal4util4math11__moduleRefZ = Module['__D4core8internal4util4math11__moduleRefZ'] = 242636;
-var __D4core8lifetime11__moduleRefZ = Module['__D4core8lifetime11__moduleRefZ'] = 242552;
-var __D4core6memory11__moduleRefZ = Module['__D4core6memory11__moduleRefZ'] = 242556;
-var __D4core7runtime11__moduleRefZ = Module['__D4core7runtime11__moduleRefZ'] = 242676;
-var __D4core4sync9exception11__moduleRefZ = Module['__D4core4sync9exception11__moduleRefZ'] = 242564;
-var __D4core4sync5mutex11__moduleRefZ = Module['__D4core4sync5mutex11__moduleRefZ'] = 242568;
-var __D4core6thread7context11__moduleRefZ = Module['__D4core6thread7context11__moduleRefZ'] = 242584;
-var __D4core6thread5fiber11__moduleRefZ = Module['__D4core6thread5fiber11__moduleRefZ'] = 242576;
-var __D4core6thread8osthread11__moduleRefZ = Module['__D4core6thread8osthread11__moduleRefZ'] = 242572;
-var __D4core6thread11__moduleRefZ = Module['__D4core6thread11__moduleRefZ'] = 242580;
-var __D4core6thread10threadbase11__moduleRefZ = Module['__D4core6thread10threadbase11__moduleRefZ'] = 242592;
-var __D4core6thread11threadgroup11__moduleRefZ = Module['__D4core6thread11threadgroup11__moduleRefZ'] = 242596;
-var __D4core6thread5types11__moduleRefZ = Module['__D4core6thread5types11__moduleRefZ'] = 242600;
-var __D4core4time11__moduleRefZ = Module['__D4core4time11__moduleRefZ'] = 242608;
-var __D6object11__moduleRefZ = Module['__D6object11__moduleRefZ'] = 242624;
-var __D2rt6aApply11__moduleRefZ = Module['__D2rt6aApply11__moduleRefZ'] = 242632;
-var __D2rt3aaA11__moduleRefZ = Module['__D2rt3aaA11__moduleRefZ'] = 242640;
-var __D2rt3adi11__moduleRefZ = Module['__D2rt3adi11__moduleRefZ'] = 242644;
-var __D2rt8arraycat11__moduleRefZ = Module['__D2rt8arraycat11__moduleRefZ'] = 242652;
-var __D2rt5cast_11__moduleRefZ = Module['__D2rt5cast_11__moduleRefZ'] = 242656;
-var _rt_options = Module['_rt_options'] = 228312;
-var _rt_envvars_enabled = Module['_rt_envvars_enabled'] = 252484;
-var _rt_cmdline_enabled = Module['_rt_cmdline_enabled'] = 228308;
-var __D2rt6config11__moduleRefZ = Module['__D2rt6config11__moduleRefZ'] = 242660;
-var __D2rt5cover11__moduleRefZ = Module['__D2rt5cover11__moduleRefZ'] = 242664;
-var __D2rt9critical_11__moduleRefZ = Module['__D2rt9critical_11__moduleRefZ'] = 242672;
-var __D2rt3deh11__moduleRefZ = Module['__D2rt3deh11__moduleRefZ'] = 242684;
-var __D2rt15deh_win64_posix11__moduleRefZ = Module['__D2rt15deh_win64_posix11__moduleRefZ'] = 242668;
-var __D2rt6dmain211__moduleRefZ = Module['__D2rt6dmain211__moduleRefZ'] = 242680;
-var __D2rt7dwarfeh11__moduleRefZ = Module['__D2rt7dwarfeh11__moduleRefZ'] = 242688;
-var __D2rt7ehalloc11__moduleRefZ = Module['__D2rt7ehalloc11__moduleRefZ'] = 242692;
-var __D2rt8lifetime11__moduleRefZ = Module['__D2rt8lifetime11__moduleRefZ'] = 242696;
-var __D2rt6memory11__moduleRefZ = Module['__D2rt6memory11__moduleRefZ'] = 242700;
-var __D2rt5minfo11__moduleRefZ = Module['__D2rt5minfo11__moduleRefZ'] = 242712;
-var __D2rt8monitor_11__moduleRefZ = Module['__D2rt8monitor_11__moduleRefZ'] = 242716;
-var __D2rt19sections_elf_shared5dummyPi = Module['__D2rt19sections_elf_shared5dummyPi'] = 228884;
-var __D2rt19sections_elf_shared11__moduleRefZ = Module['__D2rt19sections_elf_shared11__moduleRefZ'] = 242720;
-var __D2rt5tlsgc11__moduleRefZ = Module['__D2rt5tlsgc11__moduleRefZ'] = 242724;
-var __D2rt4util8typeinfo11__moduleRefZ = Module['__D2rt4util8typeinfo11__moduleRefZ'] = 242728;
-var __D2rt4util7utility11__moduleRefZ = Module['__D2rt4util7utility11__moduleRefZ'] = 242732;var wasmImports = {
+var __D3std8internal14unicode_decomp11__moduleRefZ = Module['__D3std8internal14unicode_decomp11__moduleRefZ'] = 245792;
+var __D3std8internal12unicode_norm11__moduleRefZ = Module['__D3std8internal12unicode_norm11__moduleRefZ'] = 245796;
+var __D3std8internal12unicode_comp11__moduleRefZ = Module['__D3std8internal12unicode_comp11__moduleRefZ'] = 245800;
+var __D3std4math12trigonometry11__moduleRefZ = Module['__D3std4math12trigonometry11__moduleRefZ'] = 245804;
+var __D3std4math8rounding11__moduleRefZ = Module['__D3std4math8rounding11__moduleRefZ'] = 245808;
+var __D3std4math9remainder11__moduleRefZ = Module['__D3std4math9remainder11__moduleRefZ'] = 245812;
+var __D3std4math10operations11__moduleRefZ = Module['__D3std4math10operations11__moduleRefZ'] = 245816;
+var __D3std4math11exponential11__moduleRefZ = Module['__D3std4math11exponential11__moduleRefZ'] = 245820;
+var __D3std4math9constants11__moduleRefZ = Module['__D3std4math9constants11__moduleRefZ'] = 245824;
+var __D3std4math11__moduleRefZ = Module['__D3std4math11__moduleRefZ'] = 245828;
+var __D3std8internal6memory11__moduleRefZ = Module['__D3std8internal6memory11__moduleRefZ'] = 245832;
+var __D3std12experimental9allocator6common11__moduleRefZ = Module['__D3std12experimental9allocator6common11__moduleRefZ'] = 245836;
+var __D3std10checkedint11__moduleRefZ = Module['__D3std10checkedint11__moduleRefZ'] = 245840;
+var __D3std4math8hardware11__moduleRefZ = Module['__D3std4math8hardware11__moduleRefZ'] = 245844;
+var __D3std6system11__moduleRefZ = Module['__D3std6system11__moduleRefZ'] = 245848;
+var __D3std8bitmanip11__moduleRefZ = Module['__D3std8bitmanip11__moduleRefZ'] = 245852;
+var __D3std4math6traits11__moduleRefZ = Module['__D3std4math6traits11__moduleRefZ'] = 245856;
+var __D3std3utf11__moduleRefZ = Module['__D3std3utf11__moduleRefZ'] = 245860;
+var __D3std11concurrency11__moduleRefZ = Module['__D3std11concurrency11__moduleRefZ'] = 245864;
+var __D3std4math9algebraic11__moduleRefZ = Module['__D3std4math9algebraic11__moduleRefZ'] = 245868;
+var __D3std8internal16unicode_grapheme11__moduleRefZ = Module['__D3std8internal16unicode_grapheme11__moduleRefZ'] = 245872;
+var __D3std8internal14unicode_tables11__moduleRefZ = Module['__D3std8internal14unicode_tables11__moduleRefZ'] = 245876;
+var __D3std3uni11__moduleRefZ = Module['__D3std3uni11__moduleRefZ'] = 245880;
+var __D3std6string11__moduleRefZ = Module['__D3std6string11__moduleRefZ'] = 245884;
+var __D3std4path11__moduleRefZ = Module['__D3std4path11__moduleRefZ'] = 245888;
+var __D3std9algorithm7sorting11__moduleRefZ = Module['__D3std9algorithm7sorting11__moduleRefZ'] = 245892;
+var __D3std9algorithm6setops11__moduleRefZ = Module['__D3std9algorithm6setops11__moduleRefZ'] = 245896;
+var __D3std9algorithm9searching11__moduleRefZ = Module['__D3std9algorithm9searching11__moduleRefZ'] = 245900;
+var __D3std9algorithm9iteration11__moduleRefZ = Module['__D3std9algorithm9iteration11__moduleRefZ'] = 245904;
+var __D3std9algorithm10comparison11__moduleRefZ = Module['__D3std9algorithm10comparison11__moduleRefZ'] = 245908;
+var __D3std9algorithm11__moduleRefZ = Module['__D3std9algorithm11__moduleRefZ'] = 245912;
+var __D3std6logger10nulllogger11__moduleRefZ = Module['__D3std6logger10nulllogger11__moduleRefZ'] = 245916;
+var __D3std6logger11multilogger11__moduleRefZ = Module['__D3std6logger11multilogger11__moduleRefZ'] = 245920;
+var __D3std9algorithm8mutation11__moduleRefZ = Module['__D3std9algorithm8mutation11__moduleRefZ'] = 245924;
+var __D3std5stdio11__moduleRefZ = Module['__D3std5stdio11__moduleRefZ'] = 245928;
+var __D3std6logger10filelogger11__moduleRefZ = Module['__D3std6logger10filelogger11__moduleRefZ'] = 245932;
+var __D3std6logger4core11__moduleRefZ = Module['__D3std6logger4core11__moduleRefZ'] = 245936;
+var __D3std12experimental6logger11__moduleRefZ = Module['__D3std12experimental6logger11__moduleRefZ'] = 245940;
+var __D3std5range10interfaces11__moduleRefZ = Module['__D3std5range10interfaces11__moduleRefZ'] = 245944;
+var __D3std5ascii11__moduleRefZ = Module['__D3std5ascii11__moduleRefZ'] = 245948;
+var __D3std4conv11__moduleRefZ = Module['__D3std4conv11__moduleRefZ'] = 245952;
+var __D3std10functional11__moduleRefZ = Module['__D3std10functional11__moduleRefZ'] = 245956;
+var __D3std5array11__moduleRefZ = Module['__D3std5array11__moduleRefZ'] = 245960;
+var __D3std5range11__moduleRefZ = Module['__D3std5range11__moduleRefZ'] = 245964;
+var __D3std8internal7cstring11__moduleRefZ = Module['__D3std8internal7cstring11__moduleRefZ'] = 245968;
+var __D3std8datetime8timezone11__moduleRefZ = Module['__D3std8datetime8timezone11__moduleRefZ'] = 245972;
+var __D3std6format8internal4read11__moduleRefZ = Module['__D3std6format8internal4read11__moduleRefZ'] = 245976;
+var __D3std6format4read11__moduleRefZ = Module['__D3std6format4read11__moduleRefZ'] = 245980;
+var __D3std6format11__moduleRefZ = Module['__D3std6format11__moduleRefZ'] = 245984;
+var __D3std9exception11__moduleRefZ = Module['__D3std9exception11__moduleRefZ'] = 245988;
+var __D3std8datetime7systime11__moduleRefZ = Module['__D3std8datetime7systime11__moduleRefZ'] = 245992;
+var __D3std8internal10attributes11__moduleRefZ = Module['__D3std8internal10attributes11__moduleRefZ'] = 245996;
+var __D3std6format8internal5write11__moduleRefZ = Module['__D3std6format8internal5write11__moduleRefZ'] = 246000;
+var __D3std6format5write11__moduleRefZ = Module['__D3std6format5write11__moduleRefZ'] = 246004;
+var __D3std6format4spec11__moduleRefZ = Module['__D3std6format4spec11__moduleRefZ'] = 246008;
+var __D3std8typecons11__moduleRefZ = Module['__D3std8typecons11__moduleRefZ'] = 246012;
+var __D3std5range10primitives11__moduleRefZ = Module['__D3std5range10primitives11__moduleRefZ'] = 246016;
+var __D3std4meta11__moduleRefZ = Module['__D3std4meta11__moduleRefZ'] = 246020;
+var __D3std6traits11__moduleRefZ = Module['__D3std6traits11__moduleRefZ'] = 246024;
+var __D3std8datetime4date11__moduleRefZ = Module['__D3std8datetime4date11__moduleRefZ'] = 246028;
+var __D3std4file11__moduleRefZ = Module['__D3std4file11__moduleRefZ'] = 246032;
+var __D3app11__moduleRefZ = Module['__D3app11__moduleRefZ'] = 246036;
+var __D6assets5cache11__moduleRefZ = Module['__D6assets5cache11__moduleRefZ'] = 246040;
+var __D4core5bitop11__moduleRefZ = Module['__D4core5bitop11__moduleRefZ'] = 246316;
+var __D4core8demangle11__moduleRefZ = Module['__D4core8demangle11__moduleRefZ'] = 246116;
+var __D4core9exception11__moduleRefZ = Module['__D4core9exception11__moduleRefZ'] = 246044;
+var __D4core2gc6config11__moduleRefZ = Module['__D4core2gc6config11__moduleRefZ'] = 246072;
+var __D4core2gc11gcinterface11__moduleRefZ = Module['__D4core2gc11gcinterface11__moduleRefZ'] = 246056;
+var __D4core2gc8registry11__moduleRefZ = Module['__D4core2gc8registry11__moduleRefZ'] = 246060;
+var __D4core8internal5abort11__moduleRefZ = Module['__D4core8internal5abort11__moduleRefZ'] = 246164;
+var __D4core8internal5array9appending11__moduleRefZ = Module['__D4core8internal5array9appending11__moduleRefZ'] = 246108;
+var __D4core8internal5array8capacity11__moduleRefZ = Module['__D4core8internal5array8capacity11__moduleRefZ'] = 246192;
+var __D4core8internal5array13concatenation11__moduleRefZ = Module['__D4core8internal5array13concatenation11__moduleRefZ'] = 246208;
+var __D4core8internal5array8equality11__moduleRefZ = Module['__D4core8internal5array8equality11__moduleRefZ'] = 246112;
+var __D4core8internal9backtrace5dwarf11__moduleRefZ = Module['__D4core8internal9backtrace5dwarf11__moduleRefZ'] = 246132;
+var __D4core8internal9backtrace3elf11__moduleRefZ = Module['__D4core8internal9backtrace3elf11__moduleRefZ'] = 246128;
+var __D4core8internal9backtrace6unwind11__moduleRefZ = Module['__D4core8internal9backtrace6unwind11__moduleRefZ'] = 246048;
+var __D4core8internal9container5array11__moduleRefZ = Module['__D4core8internal9container5array11__moduleRefZ'] = 246092;
+var __D4core8internal9container6common11__moduleRefZ = Module['__D4core8internal9container6common11__moduleRefZ'] = 246064;
+var __D4core8internal9container7hashtab11__moduleRefZ = Module['__D4core8internal9container7hashtab11__moduleRefZ'] = 246312;
+var __D4core8internal9container5treap11__moduleRefZ = Module['__D4core8internal9container5treap11__moduleRefZ'] = 246068;
+var __D4core8internal7convert11__moduleRefZ = Module['__D4core8internal7convert11__moduleRefZ'] = 246216;
+var __D4core8internal7dassert11__moduleRefZ = Module['__D4core8internal7dassert11__moduleRefZ'] = 246052;
+var __D4core8internal11destruction11__moduleRefZ = Module['__D4core8internal11destruction11__moduleRefZ'] = 246224;
+var __D4core8internal3elf2dl11__moduleRefZ = Module['__D4core8internal3elf2dl11__moduleRefZ'] = 246124;
+var __D4core8internal3elf2io11__moduleRefZ = Module['__D4core8internal3elf2io11__moduleRefZ'] = 246120;
+var __D4core8internal2gc4bits11__moduleRefZ = Module['__D4core8internal2gc4bits11__moduleRefZ'] = 246084;
+var __D4core8internal2gc4impl12conservativeQw11__moduleRefZ = Module['__D4core8internal2gc4impl12conservativeQw11__moduleRefZ'] = 246088;
+var __D4core8internal2gc4impl6manualQp11__moduleRefZ = Module['__D4core8internal2gc4impl6manualQp11__moduleRefZ'] = 246096;
+var __D4core8internal2gc4impl5protoQo11__moduleRefZ = Module['__D4core8internal2gc4impl5protoQo11__moduleRefZ'] = 246100;
+var __D4core8internal2gc2os11__moduleRefZ = Module['__D4core8internal2gc2os11__moduleRefZ'] = 246080;
+var __D4core8internal2gc9pooltable11__moduleRefZ = Module['__D4core8internal2gc9pooltable11__moduleRefZ'] = 246076;
+var __D4core8internal2gc5proxy11__moduleRefZ = Module['__D4core8internal2gc5proxy11__moduleRefZ'] = 246104;
+var __D4core8internal4hash11__moduleRefZ = Module['__D4core8internal4hash11__moduleRefZ'] = 246220;
+var __D4core8internal8lifetime11__moduleRefZ = Module['__D4core8internal8lifetime11__moduleRefZ'] = 246136;
+var __D4core8internal12parseoptions11__moduleRefZ = Module['__D4core8internal12parseoptions11__moduleRefZ'] = 246140;
+var __D4core8internal8spinlock11__moduleRefZ = Module['__D4core8internal8spinlock11__moduleRefZ'] = 246144;
+var __D4core8internal6string11__moduleRefZ = Module['__D4core8internal6string11__moduleRefZ'] = 246148;
+var __D4core8internal7switch_11__moduleRefZ = Module['__D4core8internal7switch_11__moduleRefZ'] = 246152;
+var __D4core8internal3utf11__moduleRefZ = Module['__D4core8internal3utf11__moduleRefZ'] = 246232;
+var __D4core8internal4util5array11__moduleRefZ = Module['__D4core8internal4util5array11__moduleRefZ'] = 246256;
+var __D4core8internal4util4math11__moduleRefZ = Module['__D4core8internal4util4math11__moduleRefZ'] = 246244;
+var __D4core8lifetime11__moduleRefZ = Module['__D4core8lifetime11__moduleRefZ'] = 246156;
+var __D4core6memory11__moduleRefZ = Module['__D4core6memory11__moduleRefZ'] = 246160;
+var __D4core7runtime11__moduleRefZ = Module['__D4core7runtime11__moduleRefZ'] = 246284;
+var __D4core4sync9exception11__moduleRefZ = Module['__D4core4sync9exception11__moduleRefZ'] = 246168;
+var __D4core4sync5mutex11__moduleRefZ = Module['__D4core4sync5mutex11__moduleRefZ'] = 246172;
+var __D4core6thread7context11__moduleRefZ = Module['__D4core6thread7context11__moduleRefZ'] = 246188;
+var __D4core6thread5fiber11__moduleRefZ = Module['__D4core6thread5fiber11__moduleRefZ'] = 246180;
+var __D4core6thread8osthread11__moduleRefZ = Module['__D4core6thread8osthread11__moduleRefZ'] = 246176;
+var __D4core6thread11__moduleRefZ = Module['__D4core6thread11__moduleRefZ'] = 246184;
+var __D4core6thread10threadbase11__moduleRefZ = Module['__D4core6thread10threadbase11__moduleRefZ'] = 246196;
+var __D4core6thread11threadgroup11__moduleRefZ = Module['__D4core6thread11threadgroup11__moduleRefZ'] = 246200;
+var __D4core6thread5types11__moduleRefZ = Module['__D4core6thread5types11__moduleRefZ'] = 246204;
+var __D4core4time11__moduleRefZ = Module['__D4core4time11__moduleRefZ'] = 246212;
+var __D6object11__moduleRefZ = Module['__D6object11__moduleRefZ'] = 246228;
+var __D2rt6aApply11__moduleRefZ = Module['__D2rt6aApply11__moduleRefZ'] = 246236;
+var __D2rt7aApplyR11__moduleRefZ = Module['__D2rt7aApplyR11__moduleRefZ'] = 246240;
+var __D2rt3aaA11__moduleRefZ = Module['__D2rt3aaA11__moduleRefZ'] = 246248;
+var __D2rt3adi11__moduleRefZ = Module['__D2rt3adi11__moduleRefZ'] = 246252;
+var __D2rt8arraycat11__moduleRefZ = Module['__D2rt8arraycat11__moduleRefZ'] = 246260;
+var __D2rt5cast_11__moduleRefZ = Module['__D2rt5cast_11__moduleRefZ'] = 246264;
+var _rt_options = Module['_rt_options'] = 232120;
+var _rt_envvars_enabled = Module['_rt_envvars_enabled'] = 255908;
+var _rt_cmdline_enabled = Module['_rt_cmdline_enabled'] = 232116;
+var __D2rt6config11__moduleRefZ = Module['__D2rt6config11__moduleRefZ'] = 246268;
+var __D2rt5cover11__moduleRefZ = Module['__D2rt5cover11__moduleRefZ'] = 246272;
+var __D2rt9critical_11__moduleRefZ = Module['__D2rt9critical_11__moduleRefZ'] = 246280;
+var __D2rt3deh11__moduleRefZ = Module['__D2rt3deh11__moduleRefZ'] = 246292;
+var __D2rt15deh_win64_posix11__moduleRefZ = Module['__D2rt15deh_win64_posix11__moduleRefZ'] = 246276;
+var __D2rt6dmain211__moduleRefZ = Module['__D2rt6dmain211__moduleRefZ'] = 246288;
+var __D2rt7dwarfeh11__moduleRefZ = Module['__D2rt7dwarfeh11__moduleRefZ'] = 246296;
+var __D2rt7ehalloc11__moduleRefZ = Module['__D2rt7ehalloc11__moduleRefZ'] = 246300;
+var __D2rt8lifetime11__moduleRefZ = Module['__D2rt8lifetime11__moduleRefZ'] = 246304;
+var __D2rt6memory11__moduleRefZ = Module['__D2rt6memory11__moduleRefZ'] = 246308;
+var __D2rt5minfo11__moduleRefZ = Module['__D2rt5minfo11__moduleRefZ'] = 246320;
+var __D2rt8monitor_11__moduleRefZ = Module['__D2rt8monitor_11__moduleRefZ'] = 246324;
+var __D2rt19sections_elf_shared5dummyPi = Module['__D2rt19sections_elf_shared5dummyPi'] = 232692;
+var __D2rt19sections_elf_shared11__moduleRefZ = Module['__D2rt19sections_elf_shared11__moduleRefZ'] = 246328;
+var __D2rt5tlsgc11__moduleRefZ = Module['__D2rt5tlsgc11__moduleRefZ'] = 246332;
+var __D2rt4util8typeinfo11__moduleRefZ = Module['__D2rt4util8typeinfo11__moduleRefZ'] = 246336;
+var __D2rt4util7utility11__moduleRefZ = Module['__D2rt4util7utility11__moduleRefZ'] = 246340;var wasmImports = {
   /** @export */
   _Unwind_DeleteException: __Unwind_DeleteException,
   /** @export */
@@ -10008,15 +10273,11 @@ var __D2rt4util7utility11__moduleRefZ = Module['__D2rt4util7utility11__moduleRef
   /** @export */
   emscripten_async_call: _emscripten_async_call,
   /** @export */
-  emscripten_cancel_main_loop: _emscripten_cancel_main_loop,
-  /** @export */
   emscripten_date_now: _emscripten_date_now,
   /** @export */
   emscripten_exit_fullscreen: _emscripten_exit_fullscreen,
   /** @export */
   emscripten_exit_pointerlock: _emscripten_exit_pointerlock,
-  /** @export */
-  emscripten_force_exit: _emscripten_force_exit,
   /** @export */
   emscripten_get_device_pixel_ratio: _emscripten_get_device_pixel_ratio,
   /** @export */
@@ -10441,6 +10702,62 @@ var __D2rt4util7utility11__moduleRefZ = Module['__D2rt4util7utility11__moduleRef
   fd_seek: _fd_seek,
   /** @export */
   fd_write: _fd_write,
+  /** @export */
+  glAttachShader: _glAttachShader,
+  /** @export */
+  glBindBuffer: _glBindBuffer,
+  /** @export */
+  glBindTexture: _glBindTexture,
+  /** @export */
+  glBlendFunc: _glBlendFunc,
+  /** @export */
+  glBufferData: _glBufferData,
+  /** @export */
+  glClear: _glClear,
+  /** @export */
+  glClearColor: _glClearColor,
+  /** @export */
+  glCompileShader: _glCompileShader,
+  /** @export */
+  glCreateProgram: _glCreateProgram,
+  /** @export */
+  glCreateShader: _glCreateShader,
+  /** @export */
+  glDrawArrays: _glDrawArrays,
+  /** @export */
+  glEnable: _glEnable,
+  /** @export */
+  glEnableVertexAttribArray: _glEnableVertexAttribArray,
+  /** @export */
+  glGenBuffers: _glGenBuffers,
+  /** @export */
+  glGenTextures: _glGenTextures,
+  /** @export */
+  glGetAttribLocation: _glGetAttribLocation,
+  /** @export */
+  glGetProgramInfoLog: _glGetProgramInfoLog,
+  /** @export */
+  glGetString: _glGetString,
+  /** @export */
+  glGetUniformLocation: _glGetUniformLocation,
+  /** @export */
+  glLinkProgram: _glLinkProgram,
+  /** @export */
+  glShaderSource: _glShaderSource,
+  /** @export */
+  glTexImage2D: _glTexImage2D,
+  /** @export */
+  glTexParameteri: _glTexParameteri,
+  /** @export */
+  glUniform1f: _glUniform1f,
+  /** @export */
+  glUniform1i: _glUniform1i,
+  /** @export */
+  glUseProgram: _glUseProgram,
+  /** @export */
+  glVertexAttribPointer: _glVertexAttribPointer,
+  /** @export */
+  glViewport: _glViewport,
   /** @export */
   invoke_i,
   /** @export */
